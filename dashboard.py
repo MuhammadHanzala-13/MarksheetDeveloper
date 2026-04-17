@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 from docx import Document
-from docx.shared import Inches
+from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_ALIGN_VERTICAL
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 import io
 import base64
 
@@ -56,45 +57,79 @@ def get_image_base64(image_bytes):
     return base64.b64encode(image_bytes).decode()
 
 def generate_word_marksheet(student_data, school_name, school_logo_bytes):
-    """Generates a Word document from a byte stream."""
+    """Generates a well-formatted Word document from a byte stream."""
     document = Document()
     
-    # Header
-    if school_logo_bytes:
-        header_section = document.sections[0].header
-        header_paragraph = header_section.paragraphs[0]
-        logo_run = header_paragraph.add_run()
-        logo_run.add_picture(io.BytesIO(school_logo_bytes), width=Inches(1.0))
-        header_paragraph.add_run(f'\t{school_name}').bold = True
-        header_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    else:
-        document.add_heading(school_name, level=1).alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # Set default font
+    style = document.styles['Normal']
+    font = style.font
+    font.name = 'Arial'
+    font.size = Pt(11)
 
-    document.add_heading('Marksheet', level=2).alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # Header
+    header_section = document.sections[0].header
+    header_paragraph = header_section.paragraphs[0]
+    header_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    if school_logo_bytes:
+        logo_run = header_paragraph.add_run()
+        logo_run.add_picture(io.BytesIO(school_logo_bytes), width=Inches(0.8))
+        header_paragraph.add_run('\t')
+    
+    school_name_run = header_paragraph.add_run(school_name)
+    school_name_run.font.name = 'Arial'
+    school_name_run.font.size = Pt(16)
+    school_name_run.bold = True
+
+    # Title
+    title = document.add_heading('Student Marksheet', level=1)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title.runs[0].font.name = 'Arial'
+    
+    document.add_paragraph() # Spacer
 
     # Student Profile
     profile_table = document.add_table(rows=1, cols=2)
+    profile_table.columns[0].width = Inches(5.0)
+    profile_table.columns[1].width = Inches(1.5)
+    
     profile_cell = profile_table.cell(0, 0)
-    profile_cell.text = f"Name: {student_data['name']}\n" \
-                       f"Roll No: {student_data['roll_no']}\n" \
-                       f"Department: {student_data['department']}"
+    p = profile_cell.paragraphs[0]
+    p.add_run('Name: ').bold = True
+    p.add_run(f"{student_data['name']}\n")
+    p.add_run('Roll No: ').bold = True
+    p.add_run(f"{student_data['roll_no']}\n")
+    p.add_run('Department: ').bold = True
+    p.add_run(f"{student_data['department']}")
+    profile_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
     photo_cell = profile_table.cell(0, 1)
+    photo_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     if student_data.get('photo_bytes'):
-        photo_run = photo_cell.paragraphs[0].add_run()
-        photo_run.add_picture(io.BytesIO(student_data['photo_bytes']), width=Inches(1.25))
+        p_photo = photo_cell.paragraphs[0]
+        p_photo.add_run().add_picture(io.BytesIO(student_data['photo_bytes']), width=Inches(1.25))
+        p_photo.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     else:
-        photo_cell.text = "Photo not available"
+        photo_cell.text = "Photo"
+        photo_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    document.add_paragraph() # Spacer
 
     # Marks table
-    document.add_heading('Marks Details', level=3)
+    document.add_heading('Marks Details', level=2).runs[0].font.name = 'Arial'
     marks_table = document.add_table(rows=1, cols=4)
     marks_table.style = 'Table Grid'
+    marks_table.autofit = False
+    marks_table.columns[0].width = Inches(2.5)
+    marks_table.columns[1].width = Inches(1.5)
+    marks_table.columns[2].width = Inches(1.5)
+    marks_table.columns[3].width = Inches(1.5)
+
     hdr_cells = marks_table.rows[0].cells
-    hdr_cells[0].text = 'Subject'
-    hdr_cells[1].text = 'Mid-term Marks'
-    hdr_cells[2].text = 'Final Marks'
-    hdr_cells[3].text = 'Total Marks (Weighted)'
+    headers = ['Subject', 'Mid-term Marks', 'Final Marks', 'Total (Weighted)']
+    for i, header_text in enumerate(headers):
+        p = hdr_cells[i].paragraphs[0]
+        p.add_run(header_text).bold = True
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     for subject, marks in student_data['marks'].items():
         row_cells = marks_table.add_row().cells
@@ -102,13 +137,23 @@ def generate_word_marksheet(student_data, school_name, school_logo_bytes):
         row_cells[1].text = str(marks['Mid-term'])
         row_cells[2].text = str(marks['Final'])
         row_cells[3].text = f"{student_data['total_marks'].get(subject, 0):.2f}"
+        # Center align marks
+        for i in range(1, 4):
+            row_cells[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    document.add_paragraph() # Spacer
 
     # Summary
-    document.add_heading('Summary', level=3)
-    document.add_paragraph(f"Percentage: {student_data['percentage']:.2f}%\n"
-                           f"GPA: {student_data['gpa']}\n"
-                           f"Grade: {student_data['grade']}\n"
-                           f"Status: {student_data['status']}")
+    document.add_heading('Overall Performance', level=2).runs[0].font.name = 'Arial'
+    summary_p = document.add_paragraph()
+    summary_p.add_run('Final Percentage: ').bold = True
+    summary_p.add_run(f"{student_data['percentage']:.2f}%\n")
+    summary_p.add_run('GPA: ').bold = True
+    summary_p.add_run(f"{student_data['gpa']}\n")
+    summary_p.add_run('Grade: ').bold = True
+    summary_p.add_run(f"{student_data['grade']}\n")
+    summary_p.add_run('Status: ').bold = True
+    summary_p.add_run(f"{student_data['status']}")
 
     doc_io = io.BytesIO()
     document.save(doc_io)
@@ -116,39 +161,76 @@ def generate_word_marksheet(student_data, school_name, school_logo_bytes):
     return doc_io
 
 def generate_excel_marksheet(student_data, school_name):
-    """Generates an Excel marksheet for a single student."""
+    """Generates a well-formatted Excel marksheet for a single student."""
     wb = Workbook()
     ws = wb.active
-    ws.title = f"{student_data['name']} Marksheet"
+    ws.title = f"{student_data['name']}"
 
-    ws.append([f"{school_name} - Marksheet"])
-    ws.merge_cells('A1:D1')
-    ws['A1'].font = Font(bold=True, size=16)
-    
-    ws.append([f"Name: {student_data['name']}", f"Roll No: {student_data['roll_no']}", f"Department: {student_data['department']}"])
+    # Styles
+    center_align = Alignment(horizontal='center', vertical='center')
+    right_align = Alignment(horizontal='right', vertical='center')
+    bold_font = Font(bold=True, size=12)
+    header_font = Font(bold=True, size=16)
+    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+    fail_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+
+    # School Header
+    ws.merge_cells('A1:D2')
+    ws['A1'].value = school_name
+    ws['A1'].font = header_font
+    ws['A1'].alignment = center_align
+
+    # Student Info
+    ws['A4'] = 'Name:'; ws['A4'].font = bold_font
+    ws['B4'] = student_data['name']
+    ws['A5'] = 'Roll No:'; ws['A5'].font = bold_font
+    ws['B5'] = student_data['roll_no']
+    ws['A6'] = 'Department:'; ws['A6'].font = bold_font
+    ws['B6'] = student_data['department']
+
+    # Marks Table Header
+    headers = ['Subject', 'Mid-term Marks', 'Final Marks', 'Total (Weighted)']
     ws.append([]) # Spacer
+    header_row = ws.max_row + 1
+    for col, text in enumerate(headers, 1):
+        cell = ws.cell(row=header_row, column=col, value=text)
+        cell.font = bold_font
+        cell.alignment = center_align
+        cell.border = thin_border
 
-    # Marks
-    ws.append(['Subject', 'Mid-term Marks', 'Final Marks', 'Total Marks (Weighted)'])
+    # Marks Data
     for subject, marks in student_data['marks'].items():
-        ws.append([
+        data_row = [
             subject,
             marks['Mid-term'],
             marks['Final'],
             f"{student_data['total_marks'].get(subject, 0):.2f}"
-        ])
-    
+        ]
+        ws.append(data_row)
+        for col in range(1, 5):
+            cell = ws.cell(row=ws.max_row, column=col)
+            cell.border = thin_border
+            if col > 1: cell.alignment = right_align
+
     # Summary
-    ws.append([]) # Spacer
-    ws.append(['Summary'])
-    ws['A' + str(ws.max_row)].font = Font(bold=True)
-    ws.append([f"Percentage:", f"{student_data['percentage']:.2f}%"])
-    ws.append([f"GPA:", student_data['gpa']])
-    ws.append([f"Grade:", student_data['grade']])
-    ws.append([f"Status:", student_data['status']])
+    summary_row_start = ws.max_row + 2
+    ws.cell(row=summary_row_start, column=1, value='Summary').font = bold_font
     
-    if student_data['status'] == 'Fail':
-        ws['B' + str(ws.max_row)].fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+    summary_data = {
+        "Percentage:": f"{student_data['percentage']:.2f}%",
+        "GPA:": student_data['gpa'],
+        "Grade:": student_data['grade'],
+        "Status:": student_data['status']
+    }
+    for i, (key, value) in enumerate(summary_data.items(), 1):
+        ws.cell(row=summary_row_start + i, column=1, value=key).font = Font(bold=True)
+        cell = ws.cell(row=summary_row_start + i, column=2, value=value)
+        if key == "Status:" and value == "Fail":
+            cell.fill = fail_fill
+
+    # Adjust Column Widths
+    for col_letter in ['A', 'B', 'C', 'D']:
+        ws.column_dimensions[col_letter].autosize = True
 
     excel_io = io.BytesIO()
     wb.save(excel_io)
