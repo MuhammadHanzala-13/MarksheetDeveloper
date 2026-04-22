@@ -3,3 +3,5 @@ python-docx
 openpyxl
 Pillow
 streamlit
+matplotlib
+seaborn
