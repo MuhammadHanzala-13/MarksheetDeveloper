@@ -141,6 +141,7 @@ def generate_word_marksheet(student_data, school_name, school_logo_bytes):
     p.add_run(f"{student_data['department']}")
     profile_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
+
     photo_cell = profile_table.cell(0, 1)
     photo_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     if student_data.get('photo_bytes'):
