@@ -3,7 +3,7 @@ from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import Font, PatternFill, Alignment
 from PIL import Image
 import os
 import json
@@ -120,18 +120,33 @@ def generate_excel_master_sheet(df, school_name):
     ws.append([school_name])
     ws.merge_cells('A1:G1')
     ws['A1'].font = Font(bold=True, size=16)
-    ws['A1'].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
     
     # Add headers
     headers = ['Student Name', 'Roll No', 'Department', 'Percentage', 'GPA', 'Grade']
     ws.append(headers)
 
+    # Style headers
+    for cell in ws[2]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal='center')
+
+    # Adjust column widths
+    ws.column_dimensions['A'].width = 25
+    ws.column_dimensions['B'].width = 15
+    ws.column_dimensions['C'].width = 20
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 10
+    ws.column_dimensions['F'].width = 10
+
     for r_idx, row in df.iterrows():
         row_data = [row['Student Name'], row['Roll No'], row['Department'], 
                     f"{row['Percentage']:.2f}%", row['GPA'], row['Grade']]
         ws.append(row_data)
-        if row['Grade'] == 'F':
-            for cell in ws[ws.max_row]:
+        # Center align the data in all cells of the new row
+        for cell in ws[ws.max_row]:
+            cell.alignment = Alignment(horizontal='center')
+            if row['Grade'] == 'F':
                 cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
 
     output_filename = "output/master_result_sheet.xlsx"
