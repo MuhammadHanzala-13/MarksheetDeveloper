@@ -8,6 +8,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 import io
 import base64
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # --- Core Marksheet Generation Logic ---
 
@@ -55,6 +57,43 @@ def calculate_single_student_grades(student_info, mid_term_weight, final_term_we
 def get_image_base64(image_bytes):
     """Converts image bytes to a base64 string for embedding in HTML."""
     return base64.b64encode(image_bytes).decode()
+
+def generate_performance_charts(df):
+    """Generates performance analysis charts."""
+    st.subheader("Performance Analysis")
+
+    # Grade Distribution
+    st.write("#### Grade Distribution")
+    grade_counts = df['Grade'].value_counts()
+    fig, ax = plt.subplots()
+    sns.barplot(x=grade_counts.index, y=grade_counts.values, ax=ax)
+    ax.set_xlabel("Grade")
+    ax.set_ylabel("Number of Students")
+    st.pyplot(fig)
+
+    # Subject-wise Performance
+    st.write("#### Subject-wise Average Marks")
+    
+    # Extract subject marks from the 'Total Marks' column
+    subject_marks = {}
+    for _, row in df.iterrows():
+        # The 'Total Marks' column is a string representation of a dictionary
+        marks_dict = eval(row['Total Marks'])
+        for subject, mark in marks_dict.items():
+            if subject not in subject_marks:
+                subject_marks[subject] = []
+            subject_marks[subject].append(mark)
+            
+    if subject_marks:
+        subject_averages = {subject: sum(marks) / len(marks) for subject, marks in subject_marks.items()}
+        
+        subject_df = pd.DataFrame(list(subject_averages.items()), columns=['Subject', 'Average Marks'])
+        
+        fig, ax = plt.subplots()
+        sns.barplot(x='Subject', y='Average Marks', data=subject_df, ax=ax)
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+        ax.set_ylabel("Average Marks")
+        st.pyplot(fig)
 
 def generate_word_marksheet(student_data, school_name, school_logo_bytes):
     """Generates a well-formatted Word document from a byte stream."""
